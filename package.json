@@ -1,0 +1,10 @@
+{
+  "name": "resume-copilot-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:client": "pnpm --filter resume-copilot-client dev",
+    "dev:server": "pnpm --filter resume-copilot-server dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter resume-copilot-server test"
+  }
+}

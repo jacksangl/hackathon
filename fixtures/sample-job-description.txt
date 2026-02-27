@@ -1,0 +1,12 @@
+We are hiring a Full-Stack Engineer to build user-facing features and backend APIs for our hiring platform.
+
+Requirements:
+- 3+ years of software engineering experience
+- Strong React and TypeScript skills
+- Experience building Node.js and Express REST APIs
+- Comfortable with PostgreSQL and SQL query optimization
+- Strong communication and collaboration skills
+
+Nice to have:
+- Supabase or Firebase experience
+- CI/CD and testing knowledge
