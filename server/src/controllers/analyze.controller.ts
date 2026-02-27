@@ -1,29 +1,25 @@
 import { Request, Response } from "express";
 
-import { ResumeDocument } from "../db/types";
-import {
-  createAnalysis,
-  createJobDescription,
-  createResumeVersion,
-  getResumeById,
-} from "../db/queries";
 import { aiService } from "../services/ai.service";
 import { scoreResumeAgainstJob } from "../services/atsScoring.service";
+import { parseResumeFile } from "../services/parser.service";
+import { downloadInputFile } from "../services/storage.service";
 import { analyzeRequestSchema } from "../schemas/requestSchemas";
-import { buildVersionLabel } from "../services/versioning.service";
+import { ApiError } from "../utils/errors";
+import path from "node:path";
 
 export const analyzeController = async (req: Request, res: Response) => {
   const input = analyzeRequestSchema.parse(req.body);
 
-  const resumeRow = await getResumeById(input.resumeId);
-  const resume = resumeRow.parsed_json as ResumeDocument;
+  const extension = path.extname(input.filePath).toLowerCase();
+  const supported = [".pdf", ".docx", ".tex"];
+  if (!supported.includes(extension)) {
+    throw new ApiError(400, "Unsupported file extension in filePath");
+  }
 
-  const job = await createJobDescription({
-    title: input.jobTitle,
-    company: input.company,
-    content: input.jobDescriptionText,
-  });
-
+  const fileBuffer = await downloadInputFile(input.filePath);
+  const parsedFileName = `resume${extension}`;
+  const resume = await parseResumeFile(fileBuffer, parsedFileName);
   const scoring = scoreResumeAgainstJob(resume, input.jobDescriptionText);
   const ai = await aiService.analyze({
     resume,
@@ -33,33 +29,8 @@ export const analyzeController = async (req: Request, res: Response) => {
     weakSections: scoring.weakSections,
   });
 
-  const analysis = await createAnalysis({
-    resumeId: input.resumeId,
-    jobDescriptionId: job.id,
-    atsScore: scoring.atsScore,
-    keywordMatch: scoring.breakdown.keywordMatch,
-    skillRelevance: scoring.breakdown.skillRelevance,
-    experienceAlignment: scoring.breakdown.experienceAlignment,
-    formattingQuality: scoring.breakdown.formattingQuality,
-    missingSkills: scoring.missingSkills,
-    weakSections: scoring.weakSections,
-    feedbackJson: ai,
-    interviewChance: scoring.interviewChance,
-    nextSteps: scoring.nextSteps,
-  });
-
-  const baselineVersion = await createResumeVersion({
-    resumeId: input.resumeId,
-    analysisId: analysis.id,
-    label: buildVersionLabel("Baseline"),
-    contentJson: resume,
-    atsScore: scoring.atsScore,
-    improvementReason: "Initial parsed resume baseline score.",
-  });
-
   res.json({
-    analysisId: analysis.id,
-    versionId: baselineVersion.id,
+    resumeSections: resume.sections,
     atsScore: scoring.atsScore,
     breakdown: scoring.breakdown,
     missingSkills: scoring.missingSkills,

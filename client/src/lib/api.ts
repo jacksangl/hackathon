@@ -14,7 +14,7 @@ import {
 } from "./types";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5000",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5001",
   timeout: 25000,
 });
 
@@ -28,7 +28,7 @@ export const uploadResume = async (file: File): Promise<UploadResumeResponse> =>
 };
 
 export const analyzeResume = async (payload: {
-  resumeId: string;
+  filePath: string;
   jobDescriptionText: string;
   jobTitle?: string;
   company?: string;

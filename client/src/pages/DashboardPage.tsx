@@ -1,94 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AppShell } from "../components/AppShell";
 import { AtsBreakdownCard } from "../components/AtsBreakdownCard";
+import { AtsGaugeCard } from "../components/AtsGaugeCard";
 import { AtsScoreCard } from "../components/AtsScoreCard";
-import { CoverLetterPanel } from "../components/CoverLetterPanel";
-import { DownloadMenu } from "../components/DownloadMenu";
-import { InterviewPrepPanel } from "../components/InterviewPrepPanel";
 import { JobDescriptionInput } from "../components/JobDescriptionInput";
-import { ResumeSectionEditor } from "../components/ResumeSectionEditor";
-import { SkillGapPanel } from "../components/SkillGapPanel";
-import { SuggestionsPanel } from "../components/SuggestionsPanel";
-import { TailorPanel } from "../components/TailorPanel";
+import { ResumeImprovementPanel } from "../components/ResumeImprovementPanel";
 import { UploadDropzone } from "../components/UploadDropzone";
-import { VersionHistoryChart } from "../components/VersionHistoryChart";
-import { VersionList } from "../components/VersionList";
 import { WorkflowStepper } from "../components/WorkflowStepper";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { useAnalyzeResume } from "../hooks/useAnalyzeResume";
-import { useDebouncedSuggestions } from "../hooks/useDebouncedSuggestions";
-import { useResumeVersions } from "../hooks/useResumeVersions";
 import { useUploadResume } from "../hooks/useUploadResume";
-import {
-  generateCoverLetter,
-  generateInterviewQuestions,
-  generateSkillGap,
-  getDownloadUrl,
-  tailorResume,
-} from "../lib/api";
-import { AnalyzeResponse, ResumeSections } from "../lib/types";
-import { fromTextBlock } from "../lib/utils";
+import { AnalyzeResponse } from "../lib/types";
 
-const emptySections: ResumeSections = {
-  summary: [],
-  experience: [],
-  education: [],
-  skills: [],
-  projects: [],
-  certifications: [],
-  other: [],
-};
+const comingSoon = ["Cover Letter", "Interview Prep", "Skill Gap", "Version Tracking"];
 
 export const DashboardPage = () => {
-  const [resumeId, setResumeId] = useState<string | null>(null);
-  const [sections, setSections] = useState<ResumeSections>(emptySections);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [uploadedFileSize, setUploadedFileSize] = useState<number>(0);
   const [jobTitle, setJobTitle] = useState("");
   const [company, setCompany] = useState("");
   const [jobDescriptionText, setJobDescriptionText] = useState("");
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
-  const [selectedSection, setSelectedSection] = useState<keyof ResumeSections>("experience");
-  const [tailorLabel, setTailorLabel] = useState("");
-  const [tailorResult, setTailorResult] = useState<{ atsScore: number; improvementReason: string } | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
-  const [coverLetterContent, setCoverLetterContent] = useState("");
-  const [coverLetterArtifactId, setCoverLetterArtifactId] = useState<string | null>(null);
-  const [interviewData, setInterviewData] = useState<AnalyzeResponse["interviewQuestionsStarter"] | null>(null);
-  const [skillGapData, setSkillGapData] = useState<AnalyzeResponse["skillGapStarter"] | null>(null);
-  const [tab, setTab] = useState("resume");
-  const [isTailoring, setIsTailoring] = useState(false);
-  const [isCoverLoading, setIsCoverLoading] = useState(false);
-  const [isInterviewLoading, setIsInterviewLoading] = useState(false);
-  const [isSkillGapLoading, setIsSkillGapLoading] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const upload = useUploadResume();
   const analyze = useAnalyzeResume();
-  const versions = useResumeVersions(resumeId);
-
-  useEffect(() => {
-    if (versions.data?.versions?.length && !selectedVersionId) {
-      setSelectedVersionId(versions.data.versions[versions.data.versions.length - 1].id);
-    }
-  }, [versions.data, selectedVersionId]);
-
-  const sectionText = useMemo(
-    () => (sections[selectedSection] || []).join("\n"),
-    [sections, selectedSection],
-  );
-
-  const suggestions = useDebouncedSuggestions({
-    resumeId,
-    section: selectedSection,
-    text: sectionText,
-    jobDescriptionText,
-    enabled: Boolean(resumeId && analysis),
-  });
 
   const workflowStep = useMemo(() => {
-    if (!resumeId) {
+    if (!uploadedFilePath) {
       return 0;
     }
 
@@ -96,40 +38,28 @@ export const DashboardPage = () => {
       return 1;
     }
 
-    if (!tailorResult) {
-      return 2;
-    }
-
-    if (tab === "resume") {
-      return 3;
-    }
-
-    if (tab === "cover" || tab === "interview" || tab === "skillgap") {
-      return 4;
-    }
-
-    return 5;
-  }, [analysis, resumeId, tab, tailorResult]);
+    return 2;
+  }, [analysis, uploadedFilePath]);
 
   const handleUpload = async (file: File) => {
     setErrorBanner(null);
     setNotice(null);
+
     const result = await upload.runUpload(file);
     if (!result) {
       setErrorBanner(upload.error ?? "Upload failed");
       return;
     }
 
-    setResumeId(result.resumeId);
-    setSections(result.parsedSections);
+    setUploadedFilePath(result.filePath);
+    setUploadedFileName(result.filename);
+    setUploadedFileSize(result.size);
     setAnalysis(null);
-    setTailorResult(null);
-    setSelectedVersionId(null);
-    setNotice("Resume uploaded and parsed.");
+    setNotice("Upload complete. Ready for ATS analysis.");
   };
 
   const handleAnalyze = async () => {
-    if (!resumeId) {
+    if (!uploadedFilePath) {
       setErrorBanner("Upload a resume first.");
       return;
     }
@@ -138,7 +68,7 @@ export const DashboardPage = () => {
     setNotice(null);
 
     const result = await analyze.runAnalyze({
-      resumeId,
+      filePath: uploadedFilePath,
       jobDescriptionText,
       jobTitle: jobTitle || undefined,
       company: company || undefined,
@@ -150,161 +80,7 @@ export const DashboardPage = () => {
     }
 
     setAnalysis(result);
-    setCoverLetterContent(result.coverLetterStarter);
-    setInterviewData(result.interviewQuestionsStarter);
-    setSkillGapData(result.skillGapStarter);
-    setSelectedVersionId(result.versionId);
-    await versions.refresh();
-    setNotice("Analysis complete.");
-  };
-
-  const handleSectionTextChange = (section: keyof ResumeSections, value: string) => {
-    setSections((prev) => ({
-      ...prev,
-      [section]: fromTextBlock(value),
-    }));
-  };
-
-  const handleApplyRewrite = async (rewrittenText: string) => {
-    handleSectionTextChange(selectedSection, rewrittenText);
-    setNotice("Rewrite applied to current section.");
-
-    if (!resumeId || !jobDescriptionText) {
-      return;
-    }
-
-    setIsTailoring(true);
-    try {
-      const saved = await tailorResume({
-        resumeId,
-        jobDescriptionText,
-        resumeSections: {
-          ...sections,
-          [selectedSection]: fromTextBlock(rewrittenText),
-        },
-        saveOnly: true,
-        label: `Edited ${new Date().toISOString().slice(0, 10)}`,
-      });
-
-      setTailorResult({
-        atsScore: saved.atsScore,
-        improvementReason: saved.improvementReason,
-      });
-      setSelectedVersionId(saved.versionId);
-      await versions.refresh();
-      setNotice("Edited version saved.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Failed to save edited version");
-    } finally {
-      setIsTailoring(false);
-    }
-  };
-
-  const handleTailor = async () => {
-    if (!resumeId) {
-      setErrorBanner("Upload a resume first.");
-      return;
-    }
-
-    setErrorBanner(null);
-    setNotice(null);
-    setIsTailoring(true);
-
-    try {
-      const result = await tailorResume({
-        resumeId,
-        jobDescriptionText,
-        label: tailorLabel || undefined,
-      });
-
-      setTailorResult({
-        atsScore: result.atsScore,
-        improvementReason: result.improvementReason,
-      });
-      setSelectedVersionId(result.versionId);
-      await versions.refresh();
-      setNotice("Tailored resume saved as a new version.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Tailor failed");
-    } finally {
-      setIsTailoring(false);
-    }
-  };
-
-  const handleRegenerateCoverLetter = async () => {
-    if (!resumeId) {
-      return;
-    }
-
-    setIsCoverLoading(true);
-    setErrorBanner(null);
-
-    try {
-      const result = await generateCoverLetter({
-        resumeId,
-        jobDescriptionText,
-      });
-      setCoverLetterContent(result.content);
-      setCoverLetterArtifactId(result.artifactId);
-      setNotice("Cover letter regenerated.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Failed to generate cover letter");
-    } finally {
-      setIsCoverLoading(false);
-    }
-  };
-
-  const handleRegenerateInterview = async () => {
-    if (!resumeId) {
-      return;
-    }
-
-    setIsInterviewLoading(true);
-    setErrorBanner(null);
-
-    try {
-      const result = await generateInterviewQuestions({ resumeId, jobDescriptionText });
-      setInterviewData(result);
-      setNotice("Interview prep updated.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Failed to generate interview prep");
-    } finally {
-      setIsInterviewLoading(false);
-    }
-  };
-
-  const handleRegenerateSkillGap = async () => {
-    if (!resumeId) {
-      return;
-    }
-
-    setIsSkillGapLoading(true);
-    setErrorBanner(null);
-
-    try {
-      const result = await generateSkillGap({ resumeId, jobDescriptionText });
-      setSkillGapData(result);
-      setNotice("Skill gap analysis updated.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Failed to generate skill gap");
-    } finally {
-      setIsSkillGapLoading(false);
-    }
-  };
-
-  const openDownload = async (id: string, format: "pdf" | "docx" | "tex") => {
-    setIsDownloading(true);
-    setErrorBanner(null);
-
-    try {
-      const response = await getDownloadUrl(id, format);
-      window.open(response.downloadUrl, "_blank", "noopener,noreferrer");
-      setNotice("Download link opened.");
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Download failed");
-    } finally {
-      setIsDownloading(false);
-    }
+    setNotice("ATS analysis complete.");
   };
 
   return (
@@ -312,8 +88,12 @@ export const DashboardPage = () => {
       <div className="space-y-5">
         <WorkflowStepper currentStep={workflowStep} />
 
-        {errorBanner ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorBanner}</div> : null}
-        {notice ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div> : null}
+        {errorBanner ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorBanner}</div>
+        ) : null}
+        {notice ? (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>
+        ) : null}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <UploadDropzone isLoading={upload.isLoading} onFileSelected={handleUpload} />
@@ -326,96 +106,91 @@ export const DashboardPage = () => {
             onJobDescriptionChange={setJobDescriptionText}
             onAnalyze={handleAnalyze}
             isAnalyzing={analyze.isLoading}
-            disabled={!resumeId}
+            disabled={!uploadedFilePath}
           />
         </div>
 
-        {analysis ? (
-          <div className="grid gap-5 md:grid-cols-2">
-            <AtsScoreCard atsScore={analysis.atsScore} interviewChance={analysis.interviewChance} />
-            <AtsBreakdownCard breakdown={analysis.breakdown} />
-          </div>
+        {uploadedFilePath ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Uploaded Resume</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 text-sm md:grid-cols-2">
+              <p>
+                <span className="text-mutedForeground">File:</span> {uploadedFileName}
+              </p>
+              <p>
+                <span className="text-mutedForeground">Size:</span> {(uploadedFileSize / 1024).toFixed(1)} KB
+              </p>
+              <p className="md:col-span-2 break-all">
+                <span className="text-mutedForeground">Bucket path:</span> {uploadedFilePath}
+              </p>
+            </CardContent>
+          </Card>
         ) : null}
 
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="resume">Resume</TabsTrigger>
-            <TabsTrigger value="cover">Cover Letter</TabsTrigger>
-            <TabsTrigger value="interview">Interview Prep</TabsTrigger>
-            <TabsTrigger value="skillgap">Skill Gap</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="resume">
-            <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-              <div className="space-y-5">
-                <ResumeSectionEditor
-                  sections={sections}
-                  selectedSection={selectedSection}
-                  onSectionSelect={setSelectedSection}
-                  onSectionTextChange={handleSectionTextChange}
-                />
-                <SuggestionsPanel
-                  data={suggestions.data}
-                  isLoading={suggestions.isLoading}
-                  error={suggestions.error}
-                  onApplyRewrite={handleApplyRewrite}
-                />
-                <TailorPanel
-                  label={tailorLabel}
-                  onLabelChange={setTailorLabel}
-                  onTailor={handleTailor}
-                  isLoading={isTailoring}
-                  result={tailorResult}
-                  disabled={!analysis || !jobDescriptionText}
-                />
-              </div>
-
-              <div className="space-y-5">
-                <VersionHistoryChart data={versions.data?.progression ?? []} />
-                <VersionList
-                  versions={versions.data?.versions ?? []}
-                  selectedVersionId={selectedVersionId}
-                  onSelectVersion={setSelectedVersionId}
-                />
-                <DownloadMenu
-                  disabled={!selectedVersionId || isDownloading}
-                  onDownload={(format) => selectedVersionId && openDownload(selectedVersionId, format)}
-                />
-                {versions.isLoading ? <p className="text-xs text-mutedForeground">Loading versions...</p> : null}
-              </div>
+        {analysis ? (
+          <>
+            <div className="grid gap-5 md:grid-cols-2">
+              <AtsGaugeCard atsScore={analysis.atsScore} interviewChance={analysis.interviewChance} />
+              <AtsScoreCard atsScore={analysis.atsScore} interviewChance={analysis.interviewChance} />
             </div>
-          </TabsContent>
 
-          <TabsContent value="cover">
-            <CoverLetterPanel
-              content={coverLetterContent}
-              onContentChange={setCoverLetterContent}
-              onRegenerate={handleRegenerateCoverLetter}
-              isLoading={isCoverLoading}
-              hasArtifact={Boolean(coverLetterArtifactId)}
-              disabled={!analysis}
-              onDownload={(format) => coverLetterArtifactId && openDownload(coverLetterArtifactId, format)}
-            />
-          </TabsContent>
+            <div className="grid gap-5 md:grid-cols-2">
+              <AtsBreakdownCard breakdown={analysis.breakdown} />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Analysis Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div>
+                    <p className="mb-1 text-xs uppercase tracking-wide text-mutedForeground">Top Feedback</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {analysis.feedback.slice(0, 4).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
 
-          <TabsContent value="interview">
-            <InterviewPrepPanel
-              data={interviewData}
-              onRegenerate={handleRegenerateInterview}
-              isLoading={isInterviewLoading}
-              disabled={!analysis}
-            />
-          </TabsContent>
+                  <div>
+                    <p className="mb-1 text-xs uppercase tracking-wide text-mutedForeground">Missing Skills</p>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.missingSkills.slice(0, 8).map((skill) => (
+                        <span key={skill} className="rounded bg-accent px-2 py-1 text-xs">
+                          {skill}
+                        </span>
+                      ))}
+                      {!analysis.missingSkills.length ? <span className="text-mutedForeground">None flagged.</span> : null}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          <TabsContent value="skillgap">
-            <SkillGapPanel
-              data={skillGapData}
-              onRegenerate={handleRegenerateSkillGap}
-              isLoading={isSkillGapLoading}
-              disabled={!analysis}
+            <ResumeImprovementPanel
+              sections={analysis.resumeSections}
+              weakSections={analysis.weakSections}
+              sectionRecommendations={analysis.sectionRecommendations}
+              feedback={analysis.feedback}
+              nextSteps={analysis.nextSteps}
+              missingKeywords={analysis.missingKeywords}
             />
-          </TabsContent>
-        </Tabs>
+          </>
+        ) : null}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Next Phase Modules</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-4">
+            {comingSoon.map((item) => (
+              <div key={item} className="rounded-md border bg-muted p-3 text-sm">
+                <p className="font-medium">{item}</p>
+                <p className="text-xs text-mutedForeground">Coming in next implementation step.</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );

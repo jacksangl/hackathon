@@ -5,17 +5,33 @@ import { randomUUID } from "node:crypto";
 
 import { runPandoc } from "./pandoc";
 
+const fallbackTexToPlain = (input: string): string => {
+  return input
+    .replace(/%.*$/gm, " ")
+    .replace(/\\section\*?\{([^}]*)\}/g, "\n$1\n")
+    .replace(/\\subsection\*?\{([^}]*)\}/g, "\n$1\n")
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})?/g, " ")
+    .replace(/[{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 export const parseTexBuffer = async (buffer: Buffer): Promise<string> => {
   const tmpDir = path.join(os.tmpdir(), `resume-tex-${randomUUID()}`);
   const texPath = path.join(tmpDir, "resume.tex");
   const outPath = path.join(tmpDir, "resume.txt");
+  const originalText = buffer.toString("utf-8");
 
   await fs.mkdir(tmpDir, { recursive: true });
   await fs.writeFile(texPath, buffer);
 
   try {
-    await runPandoc([texPath, "-f", "latex", "-t", "plain", "-o", outPath]);
-    return await fs.readFile(outPath, "utf-8");
+    try {
+      await runPandoc([texPath, "-f", "latex", "-t", "plain", "-o", outPath]);
+      return await fs.readFile(outPath, "utf-8");
+    } catch {
+      return fallbackTexToPlain(originalText);
+    }
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }

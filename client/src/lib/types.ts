@@ -9,8 +9,11 @@ export interface ResumeSections {
 }
 
 export interface UploadResumeResponse {
-  resumeId: string;
-  parsedSections: ResumeSections;
+  uploadId: string;
+  filePath: string;
+  filename: string;
+  size: number;
+  mimeType: string;
   warnings: string[];
 }
 
@@ -22,8 +25,7 @@ export interface AtsBreakdown {
 }
 
 export interface AnalyzeResponse {
-  analysisId: string;
-  versionId: string;
+  resumeSections: ResumeSections;
   atsScore: number;
   breakdown: AtsBreakdown;
   missingSkills: string[];

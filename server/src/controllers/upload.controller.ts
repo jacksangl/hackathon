@@ -4,8 +4,6 @@ import { randomUUID } from "node:crypto";
 import { Request, Response } from "express";
 
 import { env } from "../config";
-import { createResume } from "../db/queries";
-import { parseResumeFile } from "../services/parser.service";
 import { uploadInputFile } from "../services/storage.service";
 import { ApiError } from "../utils/errors";
 
@@ -21,20 +19,16 @@ export const uploadResumeController = async (req: Request, res: Response) => {
     throw new ApiError(400, "Unsupported file type. Use PDF, DOCX, or TEX");
   }
 
-  const parsed = await parseResumeFile(req.file.buffer, req.file.originalname);
-
-  const storagePath = `${env.DEMO_USER_ID}/${randomUUID()}${extension}`;
+  const uploadId = randomUUID();
+  const storagePath = `${env.DEMO_USER_ID}/${uploadId}${extension}`;
   await uploadInputFile(storagePath, req.file.buffer, req.file.mimetype || "application/octet-stream");
 
-  const resume = await createResume({
-    originalFilename: req.file.originalname,
-    originalFilePath: storagePath,
-    parsedJson: parsed,
-  });
-
   res.status(201).json({
-    resumeId: resume.id,
-    parsedSections: parsed.sections,
-    warnings: [],
+    uploadId,
+    filePath: storagePath,
+    filename: req.file.originalname,
+    size: req.file.size,
+    mimeType: req.file.mimetype || "application/octet-stream",
+    warnings: ["Upload complete. Parsing and scoring happen during analyze."],
   });
 };

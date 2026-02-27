@@ -11,7 +11,7 @@ const resumeSectionsSchema = z.object({
 });
 
 export const analyzeRequestSchema = z.object({
-  resumeId: z.string().uuid(),
+  filePath: z.string().min(1),
   jobDescriptionText: z.string().min(20),
   jobTitle: z.string().optional(),
   company: z.string().optional(),

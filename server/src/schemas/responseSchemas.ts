@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const resumeSectionsSchema = z.object({
+  summary: z.array(z.string()),
+  experience: z.array(z.string()),
+  education: z.array(z.string()),
+  skills: z.array(z.string()),
+  projects: z.array(z.string()),
+  certifications: z.array(z.string()),
+  other: z.array(z.string()),
+});
+
 export const atsBreakdownSchema = z.object({
   keywordMatch: z.number(),
   skillRelevance: z.number(),
@@ -8,8 +18,7 @@ export const atsBreakdownSchema = z.object({
 });
 
 export const analyzeResponseSchema = z.object({
-  analysisId: z.string().uuid(),
-  versionId: z.string().uuid(),
+  resumeSections: resumeSectionsSchema,
   atsScore: z.number(),
   breakdown: atsBreakdownSchema,
   missingSkills: z.array(z.string()),

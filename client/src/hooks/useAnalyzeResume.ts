@@ -8,7 +8,7 @@ export const useAnalyzeResume = () => {
   const [error, setError] = useState<string | null>(null);
 
   const runAnalyze = async (payload: {
-    resumeId: string;
+    filePath: string;
     jobDescriptionText: string;
     jobTitle?: string;
     company?: string;

@@ -41,9 +41,9 @@ Production-minded MVP with a clean workflow:
 - `POST /cover-letter`
 - `POST /interview-questions`
 - `POST /skill-gap`
-- `GET /resume-versions?resumeId=...`
-- `GET /resume/:id`
-- `GET /download/:id?format=pdf|docx|tex`
+- `GET /resume-versions?resumeId=...` (next phase)
+- `GET /resume/:id` (next phase)
+- `GET /download/:id?format=pdf|docx|tex` (next phase)
 
 ## Supabase Setup
 
@@ -75,7 +75,7 @@ Optional but recommended:
 
 Use `client/.env.example`.
 
-- `VITE_API_URL=http://localhost:5000`
+- `VITE_API_URL=http://localhost:5001`
 
 ## Local Run
 
@@ -104,20 +104,57 @@ pnpm dev:client
 ```
 
 Frontend URL: `http://localhost:5173`
-Backend URL: `http://localhost:5000`
+Backend URL: `http://localhost:5001`
 
-## Included MVP Features
+Initialize Supabase buckets (run once after setting `server/.env`):
 
-- Resume upload with PDF/DOCX/TEX validation
-- Resume parsing into structured sections
+```bash
+pnpm --filter resume-copilot-server buckets:init
+```
+
+Current phase behavior:
+- `POST /upload-resume` validates file type and uploads to Supabase bucket.
+- `POST /analyze` reads the uploaded file from bucket using `filePath`, parses it, computes ATS score, and runs Gemini feedback.
+- No Postgres dependency is required for upload/analyze in this phase.
+
+### Upload Contract
+
+`POST /upload-resume` (multipart form field: `file`)
+
+Response:
+- `uploadId`
+- `filePath`
+- `filename`
+- `size`
+- `mimeType`
+- `warnings`
+
+### Analyze Contract
+
+`POST /analyze`
+
+Request body:
+- `filePath`
+- `jobDescriptionText`
+- optional `jobTitle`
+- optional `company`
+
+Response includes:
+- `atsScore`
+- `breakdown`
+- `missingSkills`
+- `weakSections`
+- `interviewChance`
+- `nextSteps`
+- `feedback`
+
+## Included Phase 1 Features
+
+- Bucket-based resume upload with PDF/DOCX/TEX validation
+- Analyze by uploaded `filePath` (no DB dependency)
 - Deterministic ATS scoring with weighted breakdown
-- AI feedback and section-level rewrite suggestions (debounced)
-- Tailor resume generation + version tracking
-- ATS progression chart and version history
-- Cover letter generation and download
-- Interview prep question generation
-- Skill gap analysis
-- Export/download via Pandoc conversion pipeline
+- Gemini-backed resume feedback with safe fallback output
+- ATS visual card + breakdown in frontend
 
 ## Fixtures
 
