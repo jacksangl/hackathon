@@ -75,7 +75,7 @@ export const improveRequestSchema = z.object({
 
 export const exportImprovedResumeSchema = z.object({
   latex: z.string().min(20),
-  format: z.enum(["pdf", "txt", "docx", "doc"]),
+  format: z.enum(["pdf", "txt", "docx"]),
 });
 
 export const deleteUploadedResumeSchema = z.object({

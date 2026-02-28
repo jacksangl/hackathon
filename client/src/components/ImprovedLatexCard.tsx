@@ -5,8 +5,8 @@ import { Textarea } from "./ui/textarea";
 interface ImprovedLatexCardProps {
   latex: string;
   changeSummary: string[];
-  onDownload: (format: "pdf" | "doc") => Promise<void>;
-  exportingFormat: "pdf" | "doc" | null;
+  onDownload: (format: "pdf" | "docx") => Promise<void>;
+  exportingFormat: "pdf" | "docx" | null;
 }
 
 export const ImprovedLatexCard = ({
@@ -41,10 +41,10 @@ export const ImprovedLatexCard = ({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onDownload("doc")}
+            onClick={() => onDownload("docx")}
             disabled={!!exportingFormat}
           >
-            {exportingFormat === "doc" ? "Exporting DOC..." : "Download DOC"}
+            {exportingFormat === "docx" ? "Exporting DOCX..." : "Download DOCX"}
           </Button>
         </div>
       </CardContent>

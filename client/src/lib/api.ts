@@ -132,7 +132,7 @@ export const deleteUploadedResume = async (filePath: string) => {
 
 export const exportImprovedResume = async (payload: {
   latex: string;
-  format: "pdf" | "txt" | "docx" | "doc";
+  format: "pdf" | "txt" | "docx";
 }) => {
   const response = await api.post<ArrayBuffer>("/export-improved-resume", payload, {
     responseType: "arraybuffer",

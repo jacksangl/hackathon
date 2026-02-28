@@ -61,7 +61,7 @@ export const DashboardPage = () => {
   const [improvedLatex, setImprovedLatex] = useState("");
   const [changeSummary, setChangeSummary] = useState<string[]>([]);
   const [isImproving, setIsImproving] = useState(false);
-  const [exportingFormat, setExportingFormat] = useState<"pdf" | "doc" | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<"pdf" | "docx" | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -251,7 +251,7 @@ export const DashboardPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadImproved = async (format: "pdf" | "doc") => {
+  const handleDownloadImproved = async (format: "pdf" | "docx") => {
     if (!improvedLatex) {
       return;
     }
@@ -271,12 +271,12 @@ export const DashboardPage = () => {
           ? "application/pdf"
           : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-      const filename = format === "doc" ? "optimized-resume.doc" : "optimized-resume.pdf";
+      const filename = format === "docx" ? "optimized-resume.docx" : "optimized-resume.pdf";
       triggerDownload(result.data, filename, mime);
 
       const exportEngine = result.headers["x-export-engine"] || "unknown";
       setNotice(
-        `Downloaded optimized resume as ${format === "doc" ? "DOC" : "PDF"}${format === "pdf" ? ` (engine: ${exportEngine})` : ""}.`,
+        `Downloaded optimized resume as ${format === "docx" ? "DOCX" : "PDF"}${format === "pdf" ? ` (engine: ${exportEngine})` : ""}.`,
       );
     } catch (err) {
       setErrorBanner(getApiErrorMessage(err, "Failed to export improved resume"));
