@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "buckets:init": "tsx src/scripts/init-buckets.ts",
+    "deps:install": "tsx src/scripts/install-system-deps.ts",
     "test": "vitest run"
   },
   "dependencies": {

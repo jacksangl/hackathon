@@ -4,6 +4,7 @@ import { env } from "../config";
 import {
   AiAnalyzeOutput,
   CoverLetterOutput,
+  ImproveLatexOutput,
   InterviewOutput,
   ResumeDocument,
   RewriteOutput,
@@ -15,6 +16,7 @@ import {
   buildAnalyzePrompt,
   buildCoverLetterPrompt,
   buildInterviewPrompt,
+  buildImproveLatexPrompt,
   buildRewritePrompt,
   buildSkillGapPrompt,
   buildTailorPrompt,
@@ -253,5 +255,35 @@ export const aiService = {
     const generated = await callModelOrFallback<Partial<SkillGapOutput>>(prompt, fallback);
 
     return withDefaults<SkillGapOutput>(generated, fallback);
+  },
+
+  improveLatexResume: async (params: {
+    templateLatex: string;
+    resume: ResumeDocument;
+    jobDescription: string;
+    addedSkill: string;
+    addedSkillExperience?: string;
+  }): Promise<ImproveLatexOutput> => {
+    const fallback: ImproveLatexOutput = {
+      improvedLatex: params.templateLatex,
+      changeSummary: [
+        "Applied profile replacements to the default template.",
+        `Added skill '${params.addedSkill}' to technical skills.`,
+      ],
+    };
+
+    const prompt = buildImproveLatexPrompt(params);
+    const generated = await callModelOrFallback<Partial<ImproveLatexOutput>>(prompt, fallback);
+
+    const improvedLatex = generated.improvedLatex?.trim() || fallback.improvedLatex;
+    const changeSummary =
+      generated.changeSummary && generated.changeSummary.length
+        ? generated.changeSummary
+        : fallback.changeSummary;
+
+    return {
+      improvedLatex,
+      changeSummary,
+    };
   },
 };

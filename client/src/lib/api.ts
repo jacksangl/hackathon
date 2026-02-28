@@ -4,8 +4,10 @@ import {
   AnalyzeResponse,
   CoverLetterResponse,
   DownloadResponse,
+  ImproveResumeResponse,
   InterviewResponse,
   ResumeSections,
+  UploadedResumesResponse,
   ResumeVersionsResponse,
   RewriteResponse,
   SkillGapResponse,
@@ -97,4 +99,46 @@ export const getResume = async (resumeId: string) => {
 export const getDownloadUrl = async (id: string, format: "pdf" | "docx" | "tex") => {
   const { data } = await api.get<DownloadResponse>(`/download/${id}?format=${format}`);
   return data;
+};
+
+export const improveResume = async (payload: {
+  filePath: string;
+  jobDescriptionText: string;
+  addedSkill?: string;
+  userProfile?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    linkedin?: string;
+    github?: string;
+    addedSkillExperience?: string;
+  };
+}) => {
+  const { data } = await api.post<ImproveResumeResponse>("/improve-resume", payload);
+  return data;
+};
+
+export const listUploadedResumes = async () => {
+  const { data } = await api.get<UploadedResumesResponse>("/uploaded-resumes");
+  return data;
+};
+
+export const deleteUploadedResume = async (filePath: string) => {
+  const { data } = await api.delete<{ ok: boolean }>("/uploaded-resumes", {
+    data: { filePath },
+  });
+  return data;
+};
+
+export const exportImprovedResume = async (payload: {
+  latex: string;
+  format: "pdf" | "txt" | "docx" | "doc";
+}) => {
+  const response = await api.post<ArrayBuffer>("/export-improved-resume", payload, {
+    responseType: "arraybuffer",
+  });
+  return {
+    data: response.data,
+    headers: response.headers as Record<string, string | undefined>,
+  };
 };

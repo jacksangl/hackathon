@@ -36,12 +36,37 @@ const detectHeading = (line: string): keyof ResumeSections | null => {
   return null;
 };
 
+const isNoiseLine = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return true;
+  }
+  if (/^[-_=|]{3,}$/.test(trimmed)) {
+    return true;
+  }
+  if (/^[\s\-.]{4,}$/.test(trimmed)) {
+    return true;
+  }
+  if (trimmed.length <= 2) {
+    return true;
+  }
+  return false;
+};
+
+const cleanLine = (line: string): string => {
+  return line
+    .replace(/\s+/g, " ")
+    .replace(/[“”]/g, '"')
+    .replace(/[’]/g, "'")
+    .trim();
+};
+
 const parseSectionsFromText = (text: string): ResumeSections => {
   const sections = emptySections();
   const lines = text
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map(cleanLine)
+    .filter((line) => !isNoiseLine(line));
 
   let current: keyof ResumeSections = "summary";
 
@@ -52,36 +77,245 @@ const parseSectionsFromText = (text: string): ResumeSections => {
       continue;
     }
 
-    if (line.length < 2) {
-      continue;
-    }
-
     sections[current].push(line);
   }
 
   return sections;
 };
 
-const parseByExtension = async (buffer: Buffer, fileName: string): Promise<string> => {
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const extractSectionBlock = (latex: string, sectionTitle: string): string => {
+  const pattern = new RegExp(
+    `\\\\section\\{${escapeRegExp(sectionTitle)}\\}([\\s\\S]*?)(?=\\n\\s*\\\\section\\{|\\n\\s*%-------------------------------------------\\n\\\\end\\{document\\}|\\n\\s*\\\\end\\{document\\})`,
+    "i",
+  );
+  return latex.match(pattern)?.[1] ?? "";
+};
+
+interface MacroCall {
+  start: number;
+  end: number;
+  args: string[];
+}
+
+const readBracedGroup = (source: string, start: number): { value: string; end: number } | null => {
+  if (source[start] !== "{") {
+    return null;
+  }
+
+  let depth = 0;
+  for (let i = start; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          value: source.slice(start + 1, i).replace(/\s+/g, " ").trim(),
+          end: i + 1,
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
+const findMacroCalls = (source: string, macroName: string, argCount: number): MacroCall[] => {
+  const calls: MacroCall[] = [];
+  const marker = `\\${macroName}`;
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const start = source.indexOf(marker, cursor);
+    if (start < 0) {
+      break;
+    }
+
+    let scan = start + marker.length;
+    const args: string[] = [];
+    let valid = true;
+
+    for (let i = 0; i < argCount; i += 1) {
+      while (scan < source.length && /\s/.test(source[scan])) {
+        scan += 1;
+      }
+      const group = readBracedGroup(source, scan);
+      if (!group) {
+        valid = false;
+        break;
+      }
+      args.push(group.value);
+      scan = group.end;
+    }
+
+    if (valid) {
+      calls.push({ start, end: scan, args });
+      cursor = scan;
+    } else {
+      cursor = start + marker.length;
+    }
+  }
+
+  return calls;
+};
+
+const parseTemplateTexSections = (latex: string): ResumeSections => {
+  const uncommented = latex
+    .split(/\r?\n/)
+    .map((line) => line.replace(/(^|[^\\])%.*/, "$1"))
+    .join("\n");
+
+  const sections = emptySections();
+
+  const educationBlock = extractSectionBlock(uncommented, "Education");
+  const educationCalls = findMacroCalls(educationBlock, "resumeSubheading", 4);
+  for (const call of educationCalls) {
+    sections.education.push(
+      `EDU::${call.args[0]}||${call.args[1]}||${call.args[2]}||${call.args[3]}`,
+    );
+  }
+
+  const experienceBlock = extractSectionBlock(uncommented, "Experience");
+  const experienceCalls = findMacroCalls(experienceBlock, "resumeSubheading", 4);
+  for (let i = 0; i < experienceCalls.length; i += 1) {
+    const current = experienceCalls[i];
+    const next = experienceCalls[i + 1];
+    sections.experience.push(
+      `EXP_HEADER::${current.args[0]}||${current.args[1]}||${current.args[2]}||${current.args[3]}`,
+    );
+
+    const slice = experienceBlock.slice(current.end, next ? next.start : experienceBlock.length);
+    const bullets = findMacroCalls(slice, "resumeItem", 1);
+    for (const bullet of bullets) {
+      sections.experience.push(`EXP_BULLET::${bullet.args[0]}`);
+    }
+  }
+
+  const projectsBlock = extractSectionBlock(uncommented, "Projects");
+  const projectCalls = findMacroCalls(projectsBlock, "resumeProjectHeading", 2);
+  for (let i = 0; i < projectCalls.length; i += 1) {
+    const current = projectCalls[i];
+    const next = projectCalls[i + 1];
+    sections.projects.push(`PRJ_HEADER::${current.args[0]}||${current.args[1]}`);
+
+    const slice = projectsBlock.slice(current.end, next ? next.start : projectsBlock.length);
+    const bullets = findMacroCalls(slice, "resumeItem", 1);
+    for (const bullet of bullets) {
+      sections.projects.push(`PRJ_BULLET::${bullet.args[0]}`);
+    }
+  }
+
+  const skillsBlock = extractSectionBlock(uncommented, "Technical Skills");
+  const skillRows = [...skillsBlock.matchAll(/\\textbf\{([^}]*)\}\{: ([^}]*)\}/g)];
+  for (const row of skillRows) {
+    const label = cleanLine(row[1]);
+    const value = cleanLine(row[2]);
+    if (label && value) {
+      sections.skills.push(`SKILL::${label}||${value}`);
+    }
+  }
+
+  return sections;
+};
+
+const hasStructuredContent = (sections: ResumeSections): boolean => {
+  return Object.values(sections).some((items) => items.length > 0);
+};
+
+const humanizeTokenLine = (line: string): string => {
+  const tokenToText = (prefix: string): string[] | null => {
+    if (!line.startsWith(prefix)) {
+      return null;
+    }
+    return line
+      .slice(prefix.length)
+      .split("||")
+      .map((part) =>
+        cleanLine(
+          part
+            .replace(/\\textbf\{([^}]*)\}/g, "$1")
+            .replace(/\\emph\{([^}]*)\}/g, "$1")
+            .replace(/\\&/g, "&"),
+        ),
+      )
+      .filter(Boolean);
+  };
+
+  const edu = tokenToText("EDU::");
+  if (edu) {
+    return [edu[0], edu[2], edu[3], edu[1]].filter(Boolean).join(" | ");
+  }
+
+  const expHeader = tokenToText("EXP_HEADER::");
+  if (expHeader) {
+    return [expHeader[0], expHeader[1], expHeader[2], expHeader[3]].filter(Boolean).join(" | ");
+  }
+
+  const expBullet = tokenToText("EXP_BULLET::");
+  if (expBullet) {
+    return expBullet[0] ?? "";
+  }
+
+  const prjHeader = tokenToText("PRJ_HEADER::");
+  if (prjHeader) {
+    return [prjHeader[0], prjHeader[1]].filter(Boolean).join(" | ");
+  }
+
+  const prjBullet = tokenToText("PRJ_BULLET::");
+  if (prjBullet) {
+    return prjBullet[0] ?? "";
+  }
+
+  const skill = tokenToText("SKILL::");
+  if (skill) {
+    return `${skill[0] || "Skills"}: ${skill[1] || ""}`.trim();
+  }
+
+  return line;
+};
+
+export const toDisplaySections = (sections: ResumeSections): ResumeSections => {
+  return {
+    summary: sections.summary.map(humanizeTokenLine).filter(Boolean),
+    experience: sections.experience.map(humanizeTokenLine).filter(Boolean),
+    education: sections.education.map(humanizeTokenLine).filter(Boolean),
+    skills: sections.skills.map(humanizeTokenLine).filter(Boolean),
+    projects: sections.projects.map(humanizeTokenLine).filter(Boolean),
+    certifications: sections.certifications.map(humanizeTokenLine).filter(Boolean),
+    other: sections.other.map(humanizeTokenLine).filter(Boolean),
+  };
+};
+
+const parseByExtension = async (
+  buffer: Buffer,
+  fileName: string,
+): Promise<{ text: string; structured?: ResumeSections }> => {
   const extension = path.extname(fileName).toLowerCase();
 
   if (extension === ".pdf") {
-    return parsePdfBuffer(buffer);
+    return { text: await parsePdfBuffer(buffer) };
   }
 
   if (extension === ".docx") {
-    return parseDocxBuffer(buffer);
+    return { text: await parseDocxBuffer(buffer) };
   }
 
   if (extension === ".tex") {
-    return parseTexBuffer(buffer);
+    const latexSource = buffer.toString("utf-8");
+    const structured = parseTemplateTexSections(latexSource);
+    const text = await parseTexBuffer(buffer);
+    return { text, structured: hasStructuredContent(structured) ? structured : undefined };
   }
 
   throw new ApiError(400, "Unsupported resume format");
 };
 
 export const parseResumeFile = async (buffer: Buffer, fileName: string): Promise<ResumeDocument> => {
-  const text = await parseByExtension(buffer, fileName);
+  const parsed = await parseByExtension(buffer, fileName);
+  const text = parsed.text;
   const normalizedText = text.trim();
 
   if (!normalizedText) {
@@ -90,7 +324,7 @@ export const parseResumeFile = async (buffer: Buffer, fileName: string): Promise
 
   return {
     rawText: normalizedText,
-    sections: parseSectionsFromText(normalizedText),
+    sections: parsed.structured ?? parseSectionsFromText(normalizedText),
     extractedKeywords: extractKeywords(normalizedText),
   };
 };

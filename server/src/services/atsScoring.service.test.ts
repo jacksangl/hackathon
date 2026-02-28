@@ -33,4 +33,15 @@ describe("scoreResumeAgainstJob", () => {
     expect(result.breakdown.keywordMatch).toBeGreaterThan(50);
     expect(result.breakdown.skillRelevance).toBeGreaterThan(50);
   });
+
+  it("flags explicit hard requirement mismatches as not_fit", () => {
+    const jd =
+      "Minimum requirements: 6+ years experience and graduation year 2024 or later required. Must have Kubernetes and AWS.";
+
+    const result = scoreResumeAgainstJob(resumeFixture, jd);
+
+    expect(result.fitVerdict).toBe("not_fit");
+    expect(result.disqualifiers.length).toBeGreaterThan(0);
+    expect(result.missingSkills).toEqual(expect.arrayContaining(["kubernetes", "aws"]));
+  });
 });

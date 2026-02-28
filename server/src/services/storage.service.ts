@@ -87,3 +87,53 @@ export const getOutputSignedUrl = async (path: string, expiresIn = 3600) => {
 
   return data.signedUrl;
 };
+
+const allowedResumeExtensions = [".pdf", ".docx", ".tex"];
+
+const extensionOf = (name: string): string => {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+};
+
+export const listUploadedResumes = async () => {
+  const { data, error } = await supabase.storage.from(env.SUPABASE_BUCKET_INPUT).list(env.DEMO_USER_ID, {
+    limit: 200,
+  });
+
+  if (error) {
+    throw new ApiError(500, "Failed to list uploaded resumes", error);
+  }
+
+  const documents = (data || [])
+    .filter((item) => item.name && allowedResumeExtensions.includes(extensionOf(item.name)))
+    .map((item) => {
+      const meta = (item.metadata ?? {}) as { size?: number; mimetype?: string };
+      return {
+        filePath: `${env.DEMO_USER_ID}/${item.name}`,
+        filename: item.name,
+        size: meta.size ?? null,
+        mimeType: meta.mimetype ?? null,
+        updatedAt: item.updated_at ?? null,
+        createdAt: item.created_at ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return tb - ta;
+    });
+
+  return documents;
+};
+
+export const deleteUploadedResume = async (filePath: string): Promise<void> => {
+  const normalized = filePath.trim();
+  if (!normalized || !normalized.startsWith(`${env.DEMO_USER_ID}/`)) {
+    throw new ApiError(400, "Invalid uploaded resume path");
+  }
+
+  const { error } = await supabase.storage.from(env.SUPABASE_BUCKET_INPUT).remove([normalized]);
+  if (error) {
+    throw new ApiError(500, "Failed to delete uploaded resume", error);
+  }
+};

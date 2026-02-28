@@ -35,7 +35,10 @@ Production-minded MVP with a clean workflow:
 ## API Endpoints
 
 - `POST /upload-resume`
+- `GET /uploaded-resumes`
 - `POST /analyze`
+- `POST /improve-resume`
+- `POST /export-improved-resume`
 - `POST /rewrite`
 - `POST /tailor`
 - `POST /cover-letter`
@@ -91,6 +94,12 @@ Install deps:
 pnpm install
 ```
 
+Install server export system tools (`pandoc` + `tectonic`) automatically:
+
+```bash
+pnpm deps:server
+```
+
 Run backend:
 
 ```bash
@@ -129,6 +138,19 @@ Response:
 - `mimeType`
 - `warnings`
 
+### Uploaded Resumes Contract
+
+`GET /uploaded-resumes`
+
+Response:
+- `documents[]` (demo-user scoped)
+  - `filePath`
+  - `filename`
+  - `size`
+  - `mimeType`
+  - `updatedAt`
+  - `createdAt`
+
 ### Analyze Contract
 
 `POST /analyze`
@@ -143,10 +165,43 @@ Response includes:
 - `atsScore`
 - `breakdown`
 - `missingSkills`
+- `missingQualifications`
 - `weakSections`
+- `fitVerdict` (`fit` or `not_fit`)
+- `disqualifiers` (explicit requirement mismatches)
 - `interviewChance`
 - `nextSteps`
 - `feedback`
+
+### Improve Resume Contract
+
+`POST /improve-resume`
+
+Request body:
+- `filePath`
+- `jobDescriptionText`
+- optional `addedSkill` (if omitted, server selects top missing skill)
+- optional `userProfile` fields:
+  - `name`, `phone`, `email`, `linkedin`, `github`, `addedSkillExperience`
+
+Behavior:
+- Uses the default LaTeX template (`server/templates/default-resume-template.tex`).
+- Replaces profile placeholders and injects parsed resume section content into that format.
+- If required profile/skill info is missing, response returns `needsInput: true` with prompt fields.
+- If user enters `No experience` for skill experience, no fabricated skill-experience bullet is added.
+
+### Export Improved Resume Contract
+
+`POST /export-improved-resume`
+
+Request body:
+- `latex`
+- `format` (`pdf` | `txt` | `docx` | `doc`)
+
+Behavior:
+- Converts improved LaTeX into requested format and streams downloadable file bytes.
+- PDF export attempts true LaTeX compile first (`pdflatex/xelatex/lualatex/tectonic`), then falls back to simple PDF if unavailable.
+- Debug headers: `X-Export-Mode`, `X-Export-Engine`, `X-Export-Reason`.
 
 ## Included Phase 1 Features
 
@@ -162,3 +217,8 @@ Response includes:
 - `fixtures/sample-job-description.txt`
 
 Use these for quick local smoke tests.
+
+## Templates
+
+- `server/templates/default-resume-template.tex`
+- `server/templates/user-resume-template.tex`

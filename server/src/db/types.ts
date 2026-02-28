@@ -34,7 +34,10 @@ export interface AtsAnalysis {
   atsScore: number;
   breakdown: AtsBreakdown;
   missingSkills: string[];
+  missingQualifications: string[];
   weakSections: string[];
+  fitVerdict: "fit" | "not_fit";
+  disqualifiers: string[];
   interviewChance: "High Chance" | "Medium Chance" | "Low Chance";
   nextSteps: string[];
 }
@@ -81,4 +84,9 @@ export interface SkillGapOutput {
   skillsToLearn: string[];
   projectIdeas: string[];
   technologiesToStudy: string[];
+}
+
+export interface ImproveLatexOutput {
+  improvedLatex: string;
+  changeSummary: string[];
 }

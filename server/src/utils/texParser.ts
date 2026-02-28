@@ -7,12 +7,17 @@ import { runPandoc } from "./pandoc";
 
 const fallbackTexToPlain = (input: string): string => {
   return input
-    .replace(/%.*$/gm, " ")
+    .replace(/%.*$/gm, "")
     .replace(/\\section\*?\{([^}]*)\}/g, "\n$1\n")
     .replace(/\\subsection\*?\{([^}]*)\}/g, "\n$1\n")
-    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})?/g, " ")
-    .replace(/[{}]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\\resumeItem\{([^}]*)\}/g, "\n- $1")
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?\{([^}]*)\}/g, " $1 ")
+    .replace(/\\[a-zA-Z]+\*?/g, " ")
+    .replace(/[{}]/g, "\n")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 };
 

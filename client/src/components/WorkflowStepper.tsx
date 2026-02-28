@@ -1,8 +1,8 @@
-const STEPS = ["Upload", "Analyze", "Improve", "Tailor", "Prepare", "Download"];
+const STEPS = ["Upload", "Analyze", "Improve"];
 
 export const WorkflowStepper = ({ currentStep }: { currentStep: number }) => {
   return (
-    <div className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-6">
+    <div className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-3">
       {STEPS.map((step, index) => {
         const done = currentStep > index;
         const active = currentStep === index;

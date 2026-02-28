@@ -4,6 +4,7 @@
   "scripts": {
     "dev:client": "pnpm --filter resume-copilot-client dev",
     "dev:server": "pnpm --filter resume-copilot-server dev",
+    "deps:server": "pnpm --filter resume-copilot-server deps:install",
     "build": "pnpm -r build",
     "test": "pnpm --filter resume-copilot-server test"
   }

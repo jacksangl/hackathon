@@ -29,7 +29,10 @@ export interface AnalyzeResponse {
   atsScore: number;
   breakdown: AtsBreakdown;
   missingSkills: string[];
+  missingQualifications: string[];
   weakSections: string[];
+  fitVerdict: "fit" | "not_fit";
+  disqualifiers: string[];
   interviewChance: "High Chance" | "Medium Chance" | "Low Chance";
   nextSteps: string[];
   feedback: string[];
@@ -102,4 +105,46 @@ export interface DownloadResponse {
   id: string;
   format: "pdf" | "docx" | "tex";
   downloadUrl: string;
+}
+
+export interface ImproveResumeResponse {
+  needsInput: boolean;
+  missingFields?: Array<{
+    key: "name" | "phone" | "email" | "linkedin" | "github" | "addedSkillExperience";
+    label: string;
+    hint: string;
+  }>;
+  defaults?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    linkedin?: string;
+    github?: string;
+    addedSkillExperience?: string;
+  };
+  message?: string;
+  improvedLatex?: string;
+  changeSummary?: string[];
+  appliedSkill?: string;
+  appliedProfile?: {
+    name: string;
+    phone: string;
+    email: string;
+    linkedin: string;
+    github: string;
+    addedSkillExperience?: string;
+  };
+}
+
+export interface UploadedResumeDocument {
+  filePath: string;
+  filename: string;
+  size: number | null;
+  mimeType: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface UploadedResumesResponse {
+  documents: UploadedResumeDocument[];
 }

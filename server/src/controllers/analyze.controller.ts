@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 
 import { aiService } from "../services/ai.service";
 import { scoreResumeAgainstJob } from "../services/atsScoring.service";
-import { parseResumeFile } from "../services/parser.service";
+import { parseResumeFile, toDisplaySections } from "../services/parser.service";
 import { downloadInputFile } from "../services/storage.service";
 import { analyzeRequestSchema } from "../schemas/requestSchemas";
 import { ApiError } from "../utils/errors";
@@ -20,9 +20,11 @@ export const analyzeController = async (req: Request, res: Response) => {
   const fileBuffer = await downloadInputFile(input.filePath);
   const parsedFileName = `resume${extension}`;
   const resume = await parseResumeFile(fileBuffer, parsedFileName);
+  const displaySections = toDisplaySections(resume.sections);
+  const displayResume = { ...resume, sections: displaySections };
   const scoring = scoreResumeAgainstJob(resume, input.jobDescriptionText);
   const ai = await aiService.analyze({
-    resume,
+    resume: displayResume,
     jobDescription: input.jobDescriptionText,
     atsScore: scoring.atsScore,
     missingSkills: scoring.missingSkills,
@@ -30,11 +32,14 @@ export const analyzeController = async (req: Request, res: Response) => {
   });
 
   res.json({
-    resumeSections: resume.sections,
+    resumeSections: displaySections,
     atsScore: scoring.atsScore,
     breakdown: scoring.breakdown,
     missingSkills: scoring.missingSkills,
+    missingQualifications: scoring.missingQualifications,
     weakSections: scoring.weakSections,
+    fitVerdict: scoring.fitVerdict,
+    disqualifiers: scoring.disqualifiers,
     interviewChance: scoring.interviewChance,
     nextSteps: scoring.nextSteps,
     feedback: ai.feedback,

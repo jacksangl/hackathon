@@ -153,3 +153,45 @@ ${toResumeText(resume)}
 Job Description:
 ${jobDescription}`;
 };
+
+export const buildImproveLatexPrompt = (params: {
+  templateLatex: string;
+  resume: ResumeDocument;
+  jobDescription: string;
+  addedSkill: string;
+  addedSkillExperience?: string;
+}): string => {
+  return `You are editing a LaTeX resume.
+Return STRICT JSON only with shape:
+{
+  "improvedLatex": "...",
+  "changeSummary": ["..."]
+}
+
+Rules:
+- Keep the LaTeX format/structure/commands exactly the same.
+- Do not remove sections.
+- Keep each role/project header to a maximum of 3-4 bullet points.
+- Keep education details grouped correctly (for example GPA must stay within the same education entry, not as a separate education entry).
+- Preserve header/date argument structure exactly:
+  - \\resumeSubheading{<name>}{<date>}{<org>}{<location>}
+  - \\resumeProjectHeading{<name>}{<date>}
+  - Do not swap name/date positions.
+- Keep the updated resume constrained to one page in the provided template.
+- Improve bullet wording across the entire resume for ATS quality.
+- Incorporate the added skill "${params.addedSkill}" in a truthful way.
+- If added skill experience is "${params.addedSkillExperience ?? ""}" and equals "No experience", do not fabricate experience bullets.
+- Preserve valid LaTeX syntax.
+
+Resume context:
+Summary: ${params.resume.sections.summary.join(" | ")}
+Experience: ${params.resume.sections.experience.join(" | ")}
+Skills: ${params.resume.sections.skills.join(" | ")}
+Projects: ${params.resume.sections.projects.join(" | ")}
+
+Job description:
+${params.jobDescription}
+
+Template latex:
+${params.templateLatex}`;
+};
