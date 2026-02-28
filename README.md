@@ -2,7 +2,7 @@
 
 Production-minded MVP with a clean workflow:
 
-`Upload -> Analyze -> Improve -> Tailor -> Prepare -> Download`
+`Upload -> Analyze -> Improve`
 
 ## Tech Stack
 
@@ -222,3 +222,8 @@ Use these for quick local smoke tests.
 
 - `server/templates/default-resume-template.tex`
 - `server/templates/user-resume-template.tex`
+
+## Generation Rules
+
+- Canonical resume generation rules are documented in `RULES.md`.
+- These rules include strict LaTeX argument order, one-page constraints, and bullet/section limits.

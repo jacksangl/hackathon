@@ -50,7 +50,13 @@ const tryEngine = async (
       await runCommand(candidate, args, cwd);
       return { ok: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : JSON.stringify(error);
+      let message = error instanceof Error ? error.message : JSON.stringify(error);
+      if (error instanceof ApiError) {
+        const details = error.details as { stderr?: string } | undefined;
+        if (details?.stderr) {
+          message = `${message}: ${details.stderr}`.slice(0, 2400);
+        }
+      }
       errors.push(`${candidate}: ${message}`);
     }
   }

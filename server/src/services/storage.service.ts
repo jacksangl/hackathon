@@ -37,12 +37,20 @@ export const ensureRequiredBuckets = async () => {
   await ensureBucketExists(env.SUPABASE_BUCKET_OUTPUT);
 };
 
-export const uploadInputFile = async (path: string, data: Buffer, contentType: string) => {
+export const uploadInputFile = async (
+  path: string,
+  data: Buffer,
+  contentType: string,
+  options?: { upsert?: boolean },
+) => {
   const { error } = await supabase.storage
     .from(env.SUPABASE_BUCKET_INPUT)
-    .upload(path, data, { contentType, upsert: true });
+    .upload(path, data, { contentType, upsert: options?.upsert ?? false });
 
   if (error) {
+    if (alreadyExists(error.message)) {
+      throw new ApiError(409, "Input file already exists", error);
+    }
     throw new ApiError(500, "Failed to upload input file", error);
   }
 };

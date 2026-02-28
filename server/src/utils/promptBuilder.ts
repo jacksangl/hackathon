@@ -177,6 +177,9 @@ Rules:
   - \\resumeSubheading{<name>}{<date>}{<org>}{<location>}
   - \\resumeProjectHeading{<name>}{<date>}
   - Do not swap name/date positions.
+  - Correct examples:
+    - \\resumeSubheading{The Pennsylvania State University}{May. 2027}{Bachelor of Science in Computer Science}{University Park, PA}
+    - \\resumeSubheading{Software Engineer Intern}{May 2026 -- Aug 2026}{Lockheed Martin}{Dallas, Texas}
 - Keep the updated resume constrained to one page in the provided template.
 - Improve bullet wording across the entire resume for ATS quality.
 - Incorporate the added skill "${params.addedSkill}" in a truthful way.

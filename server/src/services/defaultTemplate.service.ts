@@ -8,6 +8,19 @@ const DEFAULT_EMAIL = "jake@su.edu";
 const DEFAULT_LINKEDIN = "linkedin.com/in/jake";
 const DEFAULT_GITHUB = "github.com/jake";
 
+// Hard rules enforced in the parser->LaTeX pipeline.
+// Subheading argument order must always be:
+//   \resumeSubheading{<name>}{<date>}{<org_or_degree>}{<location>}
+// Examples:
+//   \resumeSubheading{The Pennsylvania State University}{May. 2027}{Bachelor of Science in Computer Science}{University Park, PA}
+//   \resumeSubheading{Software Engineer Intern}{May 2026 -- Aug 2026}{Lockheed Martin}{Dallas, Texas}
+const LATEX_PIPELINE_RULES = {
+  maxBulletsPerHeader: 4,
+  maxEducationHeaders: 3,
+  maxExperienceHeaders: 4,
+  maxProjectHeaders: 3,
+} as const;
+
 const templatePaths = () => ({
   user: path.join(process.cwd(), "templates", "user-resume-template.tex"),
   default: path.join(process.cwd(), "templates", "default-resume-template.tex"),
@@ -231,10 +244,10 @@ const replaceSectionBlock = (latex: string, sectionTitle: string, content: strin
   return latex.replace(pattern, content);
 };
 
-const MAX_BULLETS_PER_HEADER = 4;
-const MAX_EDUCATION_HEADERS = 3;
-const MAX_EXPERIENCE_HEADERS = 4;
-const MAX_PROJECT_HEADERS = 3;
+const MAX_BULLETS_PER_HEADER = LATEX_PIPELINE_RULES.maxBulletsPerHeader;
+const MAX_EDUCATION_HEADERS = LATEX_PIPELINE_RULES.maxEducationHeaders;
+const MAX_EXPERIENCE_HEADERS = LATEX_PIPELINE_RULES.maxExperienceHeaders;
+const MAX_PROJECT_HEADERS = LATEX_PIPELINE_RULES.maxProjectHeaders;
 
 const dedupeKeepOrder = (items: string[]): string[] => {
   const seen = new Set<string>();
@@ -269,6 +282,8 @@ const cleanContentLine = (line: string): string => {
     .trim();
 };
 
+const splitCamelSpacing = (value: string): string => value.replace(/([a-z])([A-Z])/g, "$1 $2");
+
 const parseToken = (line: string, prefix: string): string[] | null => {
   if (!line.startsWith(prefix)) {
     return null;
@@ -293,7 +308,69 @@ const isInstitutionLike = (line: string): boolean =>
   /\b(university|college|institute|school|academy)\b/i.test(line);
 
 const isLocationLike = (line: string): boolean =>
-  /^[A-Za-z .'-]+,\s*[A-Z]{2}$/.test(line);
+  /^[A-Za-z .'-]+,\s*(?:[A-Z]{2}|[A-Za-z .'-]+)$/.test(line);
+
+const splitCombinedSchoolDate = (line: string): { school: string; dates: string } | null => {
+  const cleaned = splitCamelSpacing(cleanContentLine(line));
+  const monthYear = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?\\s*\\d{4}";
+  const dateRange = `(?:${monthYear}|(?:19|20)\\d{2})(?:\\s*(?:--|-|to)\\s*(?:present|current|${monthYear}|(?:19|20)\\d{2}))?`;
+  const regex = new RegExp(`^(.*?)(?:\\s*)(${dateRange})$`, "i");
+  const match = cleaned.match(regex);
+  if (!match) {
+    return null;
+  }
+
+  const school = match[1].trim().replace(/[-|,]+$/, "").trim();
+  const dates = match[2].trim();
+  if (!school || !dates || !isInstitutionLike(school)) {
+    return null;
+  }
+
+  return { school, dates };
+};
+
+const splitCombinedOrgLocation = (line: string): { org: string; location: string } | null => {
+  const cleaned = cleanContentLine(line);
+  const commaIndex = cleaned.lastIndexOf(",");
+  if (commaIndex < 0) {
+    return null;
+  }
+
+  const preCommaRaw = cleaned.slice(0, commaIndex).trim();
+  const statePart = cleaned.slice(commaIndex + 1).trim();
+  if (!preCommaRaw || !statePart) {
+    return null;
+  }
+
+  const preComma = splitCamelSpacing(preCommaRaw).replace(/\s+/g, " ").trim();
+  const words = preComma.split(" ").filter(Boolean);
+  if (words.length < 2) {
+    return null;
+  }
+
+  const multiWordCityPrefixes = new Set(["new", "san", "los", "fort", "st", "saint", "santa"]);
+  const useTwoWordCity =
+    words.length >= 3 && multiWordCityPrefixes.has(words[words.length - 2].toLowerCase());
+
+  const cityWordCount = useTwoWordCity ? 2 : 1;
+  const city = words.slice(-cityWordCount).join(" ");
+  const org = words
+    .slice(0, words.length - cityWordCount)
+    .join(" ")
+    .trim()
+    .replace(/[-|,]+$/, "")
+    .trim();
+  const location = `${city}, ${statePart}`;
+
+  if (!org || !isLocationLike(location)) {
+    return null;
+  }
+
+  return {
+    org,
+    location,
+  };
+};
 
 interface EducationEntry {
   school: string;
@@ -306,12 +383,35 @@ const buildEducationEntries = (lines: string[]): EducationEntry[] => {
   const tokenEntries = lines
     .map((line) => parseToken(line, "EDU::"))
     .filter((parts): parts is string[] => Boolean(parts))
-    .map((parts) => ({
-      school: parts[0] || "",
-      location: parts[1] || "",
-      degree: parts[2] || "",
-      dates: parts[3] || "",
-    }))
+    .map((parts) => {
+      const schoolRaw = parts[0] || "";
+      const second = parts[1] || "";
+      const degree = parts[2] || "";
+      const fourth = parts[3] || "";
+      const secondIsDate = isDateLike(second);
+      const fourthIsDate = isDateLike(fourth);
+
+      const splitSchoolDate = splitCombinedSchoolDate(schoolRaw);
+      const school = splitSchoolDate?.school || schoolRaw;
+      const dates =
+        (splitSchoolDate && (secondIsDate || !second) ? second || splitSchoolDate.dates : "") ||
+        (secondIsDate && !fourthIsDate ? second : fourthIsDate ? fourth : second);
+      const location =
+        splitSchoolDate?.dates && fourth
+          ? fourth
+          : secondIsDate && !fourthIsDate
+            ? fourth
+            : fourthIsDate
+              ? second
+              : fourth;
+
+      return {
+        school,
+        location,
+        degree,
+        dates,
+      };
+    })
     .filter((entry) => entry.school || entry.degree);
 
   if (tokenEntries.length) {
@@ -326,6 +426,20 @@ const buildEducationEntries = (lines: string[]): EducationEntry[] => {
   let current: EducationEntry | null = null;
 
   for (const line of cleaned) {
+    const splitSchoolDate = splitCombinedSchoolDate(line);
+    if (splitSchoolDate) {
+      if (current) {
+        entries.push(current);
+      }
+      current = {
+        school: splitSchoolDate.school,
+        location: "",
+        degree: "",
+        dates: splitSchoolDate.dates,
+      };
+      continue;
+    }
+
     if (isInstitutionLike(line)) {
       if (current) {
         entries.push(current);
@@ -384,8 +498,8 @@ const renderEducationSection = (lines: string[]): string => {
   const body = entries
     .map(
       (entry, idx) => `    \\resumeSubheading
-      {${escapeLatex(entry.school || `Education ${idx + 1}`)}}{${escapeLatex(entry.location || "")}}
-      {${escapeLatex(entry.degree || "")}}{${escapeLatex(entry.dates || "")}}`,
+      {${escapeLatex(entry.school || `Education ${idx + 1}`)}}{${escapeLatex(entry.dates || "")}}
+      {${escapeLatex(entry.degree || "")}}{${escapeLatex(entry.location || "")}}`,
     )
     .join("\n");
 
@@ -403,7 +517,7 @@ interface ExperienceEntry {
   bullets: string[];
 }
 
-const buildExperienceEntries = (lines: string[], addedSkillExperience?: string): ExperienceEntry[] => {
+const buildExperienceEntries = (lines: string[], addedSkillBullet?: string): ExperienceEntry[] => {
   const entries: ExperienceEntry[] = [];
   let current: ExperienceEntry | null = null;
 
@@ -422,11 +536,12 @@ const buildExperienceEntries = (lines: string[], addedSkillExperience?: string):
     const tokenHeader = parseToken(line, "EXP_HEADER::");
     if (tokenHeader) {
       pushCurrent();
+      const mergedOrgLocation = !tokenHeader[3] ? splitCombinedOrgLocation(tokenHeader[2] || "") : null;
       current = {
         title: tokenHeader[0] || "Experience",
         dates: tokenHeader[1] || "",
-        company: tokenHeader[2] || "",
-        location: tokenHeader[3] || "",
+        company: mergedOrgLocation?.org || tokenHeader[2] || "",
+        location: mergedOrgLocation?.location || tokenHeader[3] || "",
         bullets: [],
       };
       continue;
@@ -484,7 +599,11 @@ const buildExperienceEntries = (lines: string[], addedSkillExperience?: string):
         if (isLocationLike(line)) {
           fallbackCurrent.location = line;
         } else {
-          fallbackCurrent.company = line;
+          const mergedOrgLocation = splitCombinedOrgLocation(line);
+          fallbackCurrent.company = mergedOrgLocation?.org || line;
+          if (!fallbackCurrent.location) {
+            fallbackCurrent.location = mergedOrgLocation?.location || "";
+          }
         }
         continue;
       }
@@ -494,7 +613,7 @@ const buildExperienceEntries = (lines: string[], addedSkillExperience?: string):
     pushFallback();
   }
 
-  if (addedSkillExperience && addedSkillExperience.trim().toLowerCase() !== "no experience") {
+  if (addedSkillBullet && addedSkillBullet.trim()) {
     if (!entries.length) {
       entries.push({
         title: "Professional Experience",
@@ -505,7 +624,7 @@ const buildExperienceEntries = (lines: string[], addedSkillExperience?: string):
       });
     }
     entries[0].bullets = [
-      `Applied role-relevant skills by ${addedSkillExperience.trim()}`,
+      cleanContentLine(addedSkillBullet),
       ...entries[0].bullets,
     ].slice(0, MAX_BULLETS_PER_HEADER);
   }
@@ -516,8 +635,8 @@ const buildExperienceEntries = (lines: string[], addedSkillExperience?: string):
   }));
 };
 
-const renderExperienceSection = (lines: string[], addedSkillExperience?: string): string => {
-  const entries = buildExperienceEntries(lines, addedSkillExperience).filter((entry) => entry.bullets.length);
+const renderExperienceSection = (lines: string[], addedSkillBullet?: string): string => {
+  const entries = buildExperienceEntries(lines, addedSkillBullet).filter((entry) => entry.bullets.length);
   if (!entries.length) {
     return "";
   }
@@ -743,6 +862,7 @@ export const applyProfileToTemplate = (params: {
   profile: ResolvedProfile;
   resume: ResumeDocument;
   addedSkill: string;
+  addedSkillBullet?: string;
 }): string => {
   const headingBlock = `\\begin{center}
     \\textbf{\\Huge \\scshape ${escapeLatex(params.profile.name)}} \\\\ \\vspace{1pt}
@@ -755,7 +875,7 @@ export const applyProfileToTemplate = (params: {
   const educationBlock = renderEducationSection(params.resume.sections.education);
   const experienceBlock = renderExperienceSection(
     params.resume.sections.experience,
-    params.profile.addedSkillExperience,
+    params.addedSkillBullet,
   );
   const projectsBlock = renderProjectsSection(params.resume.sections.projects);
   const skillsBlock = renderSkillsSection(params.resume, params.addedSkill);

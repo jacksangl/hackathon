@@ -17,6 +17,11 @@ const emptySections = (): ResumeSections => ({
   other: [],
 });
 
+// Parser-side contract for LaTeX subheading extraction:
+// \resumeSubheading{<name>}{<date>}{<org_or_degree>}{<location>}
+// If incoming templates are malformed (swapped/merged args), normalizeEducationArgs
+// and normalizeExperienceArgs repair them into this canonical order.
+
 const headingMap: Array<{ aliases: string[]; key: keyof ResumeSections }> = [
   { aliases: ["summary", "profile", "about"], key: "summary" },
   { aliases: ["experience", "work history", "employment"], key: "experience" },
@@ -59,6 +64,89 @@ const cleanLine = (line: string): string => {
     .replace(/[“”]/g, '"')
     .replace(/[’]/g, "'")
     .trim();
+};
+
+const splitCamelSpacing = (value: string): string => value.replace(/([a-z])([A-Z])/g, "$1 $2");
+
+const isDateLikeToken = (value: string): boolean => {
+  return /\b(19|20)\d{2}\b|\bpresent\b|\bcurrent\b|\bjan\.?\b|\bfeb\.?\b|\bmar\.?\b|\bapr\.?\b|\bmay\b|\bjun\.?\b|\bjul\.?\b|\baug\.?\b|\bsep\.?\b|\bsept\.?\b|\boct\.?\b|\bnov\.?\b|\bdec\.?\b|--| to /i.test(
+    value,
+  );
+};
+
+const normalizeEducationArgs = (args: string[]): {
+  school: string;
+  date: string;
+  degree: string;
+  location: string;
+} => {
+  const schoolRaw = cleanLine(args[0] || "");
+  const second = cleanLine(args[1] || "");
+  const degree = cleanLine(args[2] || "");
+  const fourth = cleanLine(args[3] || "");
+
+  const schoolDateMatch = splitCamelSpacing(schoolRaw).match(
+    /^(.*?)(?:\s*)((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|(?:19|20)\d{2})$/i,
+  );
+  const school = schoolDateMatch?.[1]?.trim() || schoolRaw;
+  const dateFromSchool = schoolDateMatch?.[2]?.trim() || "";
+
+  const secondIsDate = isDateLikeToken(second);
+  const fourthIsDate = isDateLikeToken(fourth);
+
+  if (secondIsDate && !fourthIsDate) {
+    return { school, date: second || dateFromSchool, degree, location: fourth };
+  }
+  if (fourthIsDate && !secondIsDate) {
+    return { school, date: fourth || dateFromSchool, degree, location: second };
+  }
+
+  return {
+    school,
+    date: second || dateFromSchool,
+    degree,
+    location: fourth,
+  };
+};
+
+const normalizeExperienceArgs = (args: string[]): {
+  title: string;
+  date: string;
+  org: string;
+  location: string;
+} => {
+  const title = cleanLine(args[0] || "");
+  const date = cleanLine(args[1] || "");
+  const orgRaw = cleanLine(args[2] || "");
+  const locationRaw = cleanLine(args[3] || "");
+
+  if (locationRaw) {
+    return { title, date, org: orgRaw, location: locationRaw };
+  }
+
+  const merged = splitCamelSpacing(orgRaw);
+  const commaIndex = merged.lastIndexOf(",");
+  if (commaIndex < 0) {
+    return { title, date, org: orgRaw, location: "" };
+  }
+
+  const preComma = merged.slice(0, commaIndex).trim();
+  const postComma = merged.slice(commaIndex + 1).trim();
+  const words = preComma.split(/\s+/).filter(Boolean);
+  if (!postComma || words.length < 2) {
+    return { title, date, org: orgRaw, location: "" };
+  }
+
+  const locationCity = words[words.length - 1];
+  const org = words.slice(0, -1).join(" ").trim();
+  const location = `${locationCity}, ${postComma}`.trim();
+
+  return {
+    title,
+    date,
+    org: org || orgRaw,
+    location,
+  };
 };
 
 const parseSectionsFromText = (text: string): ResumeSections => {
@@ -173,8 +261,9 @@ const parseTemplateTexSections = (latex: string): ResumeSections => {
   const educationBlock = extractSectionBlock(uncommented, "Education");
   const educationCalls = findMacroCalls(educationBlock, "resumeSubheading", 4);
   for (const call of educationCalls) {
+    const normalized = normalizeEducationArgs(call.args);
     sections.education.push(
-      `EDU::${call.args[0]}||${call.args[1]}||${call.args[2]}||${call.args[3]}`,
+      `EDU::${normalized.school}||${normalized.date}||${normalized.degree}||${normalized.location}`,
     );
   }
 
@@ -183,8 +272,9 @@ const parseTemplateTexSections = (latex: string): ResumeSections => {
   for (let i = 0; i < experienceCalls.length; i += 1) {
     const current = experienceCalls[i];
     const next = experienceCalls[i + 1];
+    const normalized = normalizeExperienceArgs(current.args);
     sections.experience.push(
-      `EXP_HEADER::${current.args[0]}||${current.args[1]}||${current.args[2]}||${current.args[3]}`,
+      `EXP_HEADER::${normalized.title}||${normalized.date}||${normalized.org}||${normalized.location}`,
     );
 
     const slice = experienceBlock.slice(current.end, next ? next.start : experienceBlock.length);
@@ -246,7 +336,7 @@ const humanizeTokenLine = (line: string): string => {
 
   const edu = tokenToText("EDU::");
   if (edu) {
-    return [edu[0], edu[2], edu[3], edu[1]].filter(Boolean).join(" | ");
+    return [edu[0], edu[2], edu[1], edu[3]].filter(Boolean).join(" | ");
   }
 
   const expHeader = tokenToText("EXP_HEADER::");
